@@ -55,6 +55,44 @@ Shell completion is provided by Cobra:
 uhsort completion bash    # also: zsh, fish, powershell
 ```
 
+### `wcwidth` — terminal display width of UTF-8 text
+
+Compute the terminal display width of UTF-8 text: ASCII (half-width) counts as
+1, CJK and full-width characters as 2, and combining marks as 0.
+
+With positional arguments, the width of each argument is printed on its own
+line. With no arguments, stdin is read and the width of each line is printed (a
+trailing newline is not counted; an empty line yields 0).
+
+East Asian Ambiguous-width characters follow the runtime environment by
+default; use `-E` to force width 2 or `-N` to force width 1.
+
+```bash
+wcwidth [string ...]     # width of each argument
+wcwidth                  # width of each stdin line
+wcwidth -E [string ...]  # ambiguous-width characters as width 2
+wcwidth -N [string ...]  # ambiguous-width characters as width 1
+```
+
+Examples:
+
+```console
+$ wcwidth hello 你好 'a😀b'
+5
+4
+4
+
+$ printf '中文\nascii\n' | wcwidth
+4
+5
+```
+
+Shell completion is provided by Cobra:
+
+```bash
+wcwidth completion bash    # also: zsh, fish, powershell
+```
+
 ## License
 
 [MIT](./LICENSE)
