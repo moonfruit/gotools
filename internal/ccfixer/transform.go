@@ -13,8 +13,8 @@ import (
 // with the number of system messages that were merged. It is fail-open: any
 // problem (non-JSON, missing/!array `messages`, encode failure) yields the
 // original bytes unchanged with n=0 and a nil error. When nothing is merged the
-// original bytes are returned untouched, preserving byte-for-byte stability for
-// upstream prefix caching.
+// original bytes are returned untouched (no decode/re-encode round-trip), so an
+// unmodified request reaches the upstream exactly as Claude Code sent it.
 func Transform(body []byte) (out []byte, n int, err error) {
 	var root map[string]any
 	dec := json.NewDecoder(bytes.NewReader(body))
