@@ -119,11 +119,17 @@ single line; the human-readable banner goes to **stderr**. With `-l :0` you can
 let the OS pick a port and capture the URL for shell integration:
 
 ```bash
-exec 3< <(ccfixer -u https://relay.example.com -l :0)
-read -r ANTHROPIC_BASE_URL <&3      # e.g. http://127.0.0.1:54321
+# bash/zsh: launch on a random port, capture the URL, stop it when the shell exits
+coproc CCFIXER { exec ccfixer -u https://relay.example.com -l :0; }
+trap 'kill "$CCFIXER_PID" 2>/dev/null' EXIT
+read -r ANTHROPIC_BASE_URL <&"${CCFIXER[0]}"   # e.g. http://127.0.0.1:54321
 export ANTHROPIC_BASE_URL
-# ccfixer keeps serving in the background; the shell exit cleans it up
 ```
+
+`ccfixer` blocks while serving, so it must be stopped explicitly — the `EXIT`
+trap above kills it via `$CCFIXER_PID` when the shell ends. (Plain
+`exec 3< <(ccfixer …)` also captures the URL, but leaves the proxy orphaned
+after the shell exits.)
 
 Then point Claude Code at the proxy (e.g. `ANTHROPIC_BASE_URL=http://127.0.0.1:8787`).
 

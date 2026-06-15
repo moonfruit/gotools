@@ -32,13 +32,14 @@
 
 ### Shell 集成惯用法（写入 README）
 
-服务常驻阻塞，`$(...)` 会卡住，推荐进程替换 + 读首行：
+服务常驻阻塞，`$(...)` 会卡住，推荐用 coproc 拿到 fd 与 PID，读首行并在 shell 退出时
+显式 kill（ccfixer 阻塞 serve、不会自行随 shell 退出收尾）：
 
 ```bash
-exec 3< <(ccfixer -u https://relay.example.com -l :0)
-read -r ANTHROPIC_BASE_URL <&3      # 取到 http://127.0.0.1:<随机端口>
+coproc CCFIXER { exec ccfixer -u https://relay.example.com -l :0; }
+trap 'kill "$CCFIXER_PID" 2>/dev/null' EXIT
+read -r ANTHROPIC_BASE_URL <&"${CCFIXER[0]}"   # 取到 http://127.0.0.1:<随机端口>
 export ANTHROPIC_BASE_URL
-# ccfixer 在后台继续 serve；shell 退出时自动收尾
 ```
 
 ## 4. 实现方案
