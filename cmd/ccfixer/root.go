@@ -59,17 +59,17 @@ func runRoot(cmd *cobra.Command, opts *options) error {
 	return server.ListenAndServe()
 }
 
-// newProxy builds a single-host reverse proxy to target that rewrites qualifying
-// request bodies via rewriteRequest before forwarding.
+// newProxy builds a reverse proxy to target that rewrites qualifying request
+// bodies via rewriteRequest before forwarding. It uses the modern Rewrite hook
+// (Director is deprecated as of Go 1.26).
 func newProxy(target *url.URL, opts *options, logw io.Writer) *httputil.ReverseProxy {
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	orig := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		orig(req)
-		req.Host = target.Host
-		rewriteRequest(req, opts, logw)
+	return &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)         // route to target scheme/host, joining the inbound path
+			pr.Out.Host = target.Host // send the upstream host header
+			rewriteRequest(pr.Out, opts, logw)
+		},
 	}
-	return proxy
 }
 
 // rewriteRequest rewrites the body of POST requests whose path contains
