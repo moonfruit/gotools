@@ -41,10 +41,90 @@ func Transform(body []byte) (out []byte, n int, err error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), count, nil
 }
 
-// mergeSystemMessages is fully implemented in Task 2. For now it is a no-op so
-// the passthrough behavior compiles and the no-system case returns count 0.
+// mergeSystemMessages folds every `role:"system"` message into an adjacent user
+// message, wrapping the system text in <system-reminder>...</system-reminder>.
+// Preference order per system message:
+//  1. the immediately preceding user message (already in the result),
+//  2. else the next following user message,
+//  3. else (no adjacent user) change its own role to "user".
+//
+// Returns the new slice and the number of system messages handled.
 func mergeSystemMessages(msgs []any) ([]any, int) {
-	return msgs, 0
+	result := make([]any, 0, len(msgs))
+	count := 0
+	for i := 0; i < len(msgs); i++ {
+		m, ok := msgs[i].(map[string]any)
+		if !ok || m["role"] != "system" {
+			result = append(result, msgs[i])
+			continue
+		}
+		reminder := "<system-reminder>" + systemText(m) + "</system-reminder>"
+
+		// 1. Preceding user (last element currently in result).
+		if k := len(result); k > 0 {
+			if prev, ok := result[k-1].(map[string]any); ok && prev["role"] == "user" {
+				mergeReminder(prev, reminder)
+				count++
+				continue
+			}
+		}
+		// 2. Following user.
+		if j := nextUserIndex(msgs, i+1); j >= 0 {
+			mergeReminder(msgs[j].(map[string]any), reminder)
+			count++
+			continue // drop this system message; the user at j is appended later
+		}
+		// 3. Fallback: relabel as user.
+		m["role"] = "user"
+		result = append(result, m)
+		count++
+	}
+	return result, count
 }
 
-var _ = strings.Join // referenced by Task 2; keeps the import while stubbed
+// systemText extracts the plain text of a system message, supporting both a
+// string content and an array of content blocks (text blocks joined by "\n").
+func systemText(m map[string]any) string {
+	switch c := m["content"].(type) {
+	case string:
+		return c
+	case []any:
+		var parts []string
+		for _, b := range c {
+			blk, ok := b.(map[string]any)
+			if !ok || blk["type"] != "text" {
+				continue
+			}
+			if t, ok := blk["text"].(string); ok {
+				parts = append(parts, t)
+			}
+		}
+		return strings.Join(parts, "\n")
+	default:
+		return ""
+	}
+}
+
+// mergeReminder appends the wrapped reminder to a user message's content,
+// handling both string and block-array content shapes.
+func mergeReminder(user map[string]any, reminder string) {
+	switch c := user["content"].(type) {
+	case string:
+		user["content"] = c + "\n" + reminder
+	case []any:
+		user["content"] = append(c, map[string]any{"type": "text", "text": reminder})
+	default:
+		user["content"] = reminder
+	}
+}
+
+// nextUserIndex returns the index of the first user message at or after `from`,
+// or -1 if none.
+func nextUserIndex(msgs []any, from int) int {
+	for j := from; j < len(msgs); j++ {
+		if m, ok := msgs[j].(map[string]any); ok && m["role"] == "user" {
+			return j
+		}
+	}
+	return -1
+}
