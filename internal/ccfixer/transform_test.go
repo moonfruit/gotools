@@ -186,6 +186,61 @@ func TestMergeSystemNoUserFallsBackToRoleChange(t *testing.T) {
 	}
 }
 
+func TestMergeSystemAfterAssistantUsesFollowingUserBlocks(t *testing.T) {
+	in := []byte(`{"messages":[
+		{"role":"assistant","content":"b"},
+		{"role":"system","content":"ctx"},
+		{"role":"user","content":[{"type":"text","text":"c"}]}
+	]}`)
+	out, n, err := Transform(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("want n=1, got %d", n)
+	}
+	msgs := messagesOf(t, decodeBody(t, out))
+	if len(msgs) != 2 {
+		t.Fatalf("want 2 messages, got %d", len(msgs))
+	}
+	u := msgAt(t, msgs, 1)
+	if u["role"] != "user" {
+		t.Fatalf("message 1 role = %v, want user", u["role"])
+	}
+	blocks, ok := u["content"].([]any)
+	if !ok || len(blocks) != 2 {
+		t.Fatalf("want content array of 2 blocks, got %v", u["content"])
+	}
+	last, _ := blocks[1].(map[string]any)
+	if last["type"] != "text" || last["text"] != "<system-reminder>ctx</system-reminder>" {
+		t.Fatalf("last block = %v", last)
+	}
+}
+
+func TestMergeMultipleSystemBeforeUser(t *testing.T) {
+	in := []byte(`{"messages":[
+		{"role":"system","content":"s1"},
+		{"role":"system","content":"s2"},
+		{"role":"user","content":"u"}
+	]}`)
+	out, n, err := Transform(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("want n=2, got %d", n)
+	}
+	msgs := messagesOf(t, decodeBody(t, out))
+	if len(msgs) != 1 {
+		t.Fatalf("want 1 message, got %d", len(msgs))
+	}
+	u := msgAt(t, msgs, 0)
+	want := "u\n<system-reminder>s1</system-reminder>\n<system-reminder>s2</system-reminder>"
+	if u["role"] != "user" || u["content"] != want {
+		t.Fatalf("message 0 = %v, want user content %q", u, want)
+	}
+}
+
 func TestTransformDoesNotHTMLEscapeAndKeepsNumbers(t *testing.T) {
 	in := []byte(`{"max_tokens":1024,"messages":[{"role":"user","content":"hi"},{"role":"system","content":"x"}]}`)
 	out, _, err := Transform(in)

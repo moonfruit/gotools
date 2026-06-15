@@ -52,7 +52,7 @@ func Transform(body []byte) (out []byte, n int, err error) {
 func mergeSystemMessages(msgs []any) ([]any, int) {
 	result := make([]any, 0, len(msgs))
 	count := 0
-	for i := 0; i < len(msgs); i++ {
+	for i := range len(msgs) {
 		m, ok := msgs[i].(map[string]any)
 		if !ok || m["role"] != "system" {
 			result = append(result, msgs[i])
