@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -52,11 +54,42 @@ func runRoot(cmd *cobra.Command, opts *options) error {
 		return fmt.Errorf("upstream URL must include scheme and host, got %q", opts.upstream)
 	}
 
-	proxy := newProxy(target, opts, cmd.ErrOrStderr())
-	fmt.Fprintf(cmd.OutOrStdout(), "ccfixer listening on %s, forwarding to %s\n", opts.listen, opts.upstream)
+	// Bind before announcing, so a bind failure (port in use, bad address)
+	// returns an error instead of printing a misleading banner. A port of 0
+	// in opts.listen makes the OS pick a free port, which we read back here.
+	ln, err := net.Listen("tcp", opts.listen)
+	if err != nil {
+		return fmt.Errorf("listen on %q: %w", opts.listen, err)
+	}
+	baseURL, err := resolveBaseURL(opts.listen, ln.Addr().(*net.TCPAddr).Port)
+	if err != nil {
+		ln.Close()
+		return err
+	}
 
-	server := &http.Server{Addr: opts.listen, Handler: proxy}
-	return server.ListenAndServe()
+	proxy := newProxy(target, opts, cmd.ErrOrStderr())
+	fmt.Fprintln(cmd.OutOrStdout(), baseURL)                                                                // machine-readable
+	fmt.Fprintf(cmd.ErrOrStderr(), "ccfixer listening on %s, forwarding to %s\n", ln.Addr(), opts.upstream) // human banner
+
+	server := &http.Server{Handler: proxy}
+	return server.Serve(ln)
+}
+
+// resolveBaseURL builds the base URL clients should use to reach the proxy,
+// given the listen address the user requested and the actual bound port. An
+// empty or unspecified host (e.g. ":0", "0.0.0.0", "::") is reported as
+// 127.0.0.1 so the URL is directly usable.
+func resolveBaseURL(listenAddr string, port int) (string, error) {
+	host, _, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		return "", fmt.Errorf("invalid listen address %q: %w", listenAddr, err)
+	}
+	if host == "" {
+		host = "127.0.0.1"
+	} else if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, strconv.Itoa(port)), nil
 }
 
 // newProxy builds a reverse proxy to target that rewrites qualifying request

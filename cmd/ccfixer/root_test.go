@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -61,5 +63,69 @@ func TestProxyPassesThroughNonMessagesPath(t *testing.T) {
 	resp.Body.Close()
 	if string(got) != body {
 		t.Fatalf("non-messages path should pass body through unchanged, got: %s", got)
+	}
+}
+
+func TestResolveBaseURL(t *testing.T) {
+	cases := []struct {
+		name       string
+		listenAddr string
+		port       int
+		want       string
+	}{
+		{"empty host", ":0", 54321, "http://127.0.0.1:54321"},
+		{"loopback", "127.0.0.1:0", 8080, "http://127.0.0.1:8080"},
+		{"unspecified v4", "0.0.0.0:0", 9000, "http://127.0.0.1:9000"},
+		{"unspecified v6", "[::]:0", 9100, "http://127.0.0.1:9100"},
+		{"hostname", "localhost:0", 7000, "http://localhost:7000"},
+		{"concrete ip", "192.168.1.100:0", 9200, "http://192.168.1.100:9200"},
+		{"ipv6 loopback", "[::1]:0", 9300, "http://[::1]:9300"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := resolveBaseURL(tc.listenAddr, tc.port)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("resolveBaseURL(%q, %d) = %q, want %q", tc.listenAddr, tc.port, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveBaseURLInvalid(t *testing.T) {
+	if _, err := resolveBaseURL("bogus", 1234); err == nil {
+		t.Fatal("want error for invalid listen address, got nil")
+	}
+}
+
+func TestResolveBaseURLWithRealRandomPort(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	if port <= 0 {
+		t.Fatalf("expected a positive bound port, got %d", port)
+	}
+	got, err := resolveBaseURL("127.0.0.1:0", port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "http://127.0.0.1:" + strconv.Itoa(port)
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRunRootInvalidListen(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"-u", "https://example.com", "-l", "bogus"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("want error for invalid listen address, got nil")
 	}
 }

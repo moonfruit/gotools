@@ -110,8 +110,26 @@ Keeping the message in place (rather than hoisting it into the top-level
 ```bash
 ccfixer -u https://relay.example.com           # listen on 127.0.0.1:8787
 ccfixer -u https://relay.example.com -l :9000  # custom listen address
+ccfixer -u https://relay.example.com -l :0     # listen on a random free port
 ccfixer -u https://relay.example.com -v        # log merges per request
 ```
+
+The chosen base URL (`http://127.0.0.1:<port>`) is printed to **stdout** as a
+single line; the human-readable banner goes to **stderr**. With `-l :0` you can
+let the OS pick a port and capture the URL for shell integration:
+
+```bash
+# bash/zsh: launch on a random port, capture the URL, stop it when the shell exits
+coproc CCFIXER { exec ccfixer -u https://relay.example.com -l :0; }
+trap 'kill "$CCFIXER_PID" 2>/dev/null' EXIT
+read -r ANTHROPIC_BASE_URL <&"${CCFIXER[0]}"   # e.g. http://127.0.0.1:54321
+export ANTHROPIC_BASE_URL
+```
+
+`ccfixer` blocks while serving, so it must be stopped explicitly — the `EXIT`
+trap above kills it via `$CCFIXER_PID` when the shell ends. (Plain
+`exec 3< <(ccfixer …)` also captures the URL, but leaves the proxy orphaned
+after the shell exits.)
 
 Then point Claude Code at the proxy (e.g. `ANTHROPIC_BASE_URL=http://127.0.0.1:8787`).
 
