@@ -119,3 +119,13 @@ func TestResolveBaseURLWithRealRandomPort(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+func TestRunRootInvalidListen(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"-u", "https://example.com", "-l", "bogus"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("want error for invalid listen address, got nil")
+	}
+}

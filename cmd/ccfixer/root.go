@@ -54,11 +54,25 @@ func runRoot(cmd *cobra.Command, opts *options) error {
 		return fmt.Errorf("upstream URL must include scheme and host, got %q", opts.upstream)
 	}
 
-	proxy := newProxy(target, opts, cmd.ErrOrStderr())
-	fmt.Fprintf(cmd.OutOrStdout(), "ccfixer listening on %s, forwarding to %s\n", opts.listen, opts.upstream)
+	// Bind before announcing, so a bind failure (port in use, bad address)
+	// returns an error instead of printing a misleading banner. A port of 0
+	// in opts.listen makes the OS pick a free port, which we read back here.
+	ln, err := net.Listen("tcp", opts.listen)
+	if err != nil {
+		return fmt.Errorf("listen on %q: %w", opts.listen, err)
+	}
+	baseURL, err := resolveBaseURL(opts.listen, ln.Addr().(*net.TCPAddr).Port)
+	if err != nil {
+		ln.Close()
+		return err
+	}
 
-	server := &http.Server{Addr: opts.listen, Handler: proxy}
-	return server.ListenAndServe()
+	proxy := newProxy(target, opts, cmd.ErrOrStderr())
+	fmt.Fprintln(cmd.OutOrStdout(), baseURL)                                                                // machine-readable
+	fmt.Fprintf(cmd.ErrOrStderr(), "ccfixer listening on %s, forwarding to %s\n", ln.Addr(), opts.upstream) // human banner
+
+	server := &http.Server{Handler: proxy}
+	return server.Serve(ln)
 }
 
 // resolveBaseURL builds the base URL clients should use to reach the proxy,
