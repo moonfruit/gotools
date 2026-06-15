@@ -110,7 +110,19 @@ Keeping the message in place (rather than hoisting it into the top-level
 ```bash
 ccfixer -u https://relay.example.com           # listen on 127.0.0.1:8787
 ccfixer -u https://relay.example.com -l :9000  # custom listen address
+ccfixer -u https://relay.example.com -l :0     # listen on a random free port
 ccfixer -u https://relay.example.com -v        # log merges per request
+```
+
+The chosen base URL (`http://127.0.0.1:<port>`) is printed to **stdout** as a
+single line; the human-readable banner goes to **stderr**. With `-l :0` you can
+let the OS pick a port and capture the URL for shell integration:
+
+```bash
+exec 3< <(ccfixer -u https://relay.example.com -l :0)
+read -r ANTHROPIC_BASE_URL <&3      # e.g. http://127.0.0.1:54321
+export ANTHROPIC_BASE_URL
+# ccfixer keeps serving in the background; the shell exit cleans it up
 ```
 
 Then point Claude Code at the proxy (e.g. `ANTHROPIC_BASE_URL=http://127.0.0.1:8787`).
