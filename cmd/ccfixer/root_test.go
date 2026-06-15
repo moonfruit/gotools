@@ -78,6 +78,8 @@ func TestResolveBaseURL(t *testing.T) {
 		{"unspecified v4", "0.0.0.0:0", 9000, "http://127.0.0.1:9000"},
 		{"unspecified v6", "[::]:0", 9100, "http://127.0.0.1:9100"},
 		{"hostname", "localhost:0", 7000, "http://localhost:7000"},
+		{"concrete ip", "192.168.1.100:0", 9200, "http://192.168.1.100:9200"},
+		{"ipv6 loopback", "[::1]:0", 9300, "http://[::1]:9300"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
