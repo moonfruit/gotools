@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -57,6 +59,23 @@ func runRoot(cmd *cobra.Command, opts *options) error {
 
 	server := &http.Server{Addr: opts.listen, Handler: proxy}
 	return server.ListenAndServe()
+}
+
+// resolveBaseURL builds the base URL clients should use to reach the proxy,
+// given the listen address the user requested and the actual bound port. An
+// empty or unspecified host (e.g. ":0", "0.0.0.0", "::") is reported as
+// 127.0.0.1 so the URL is directly usable.
+func resolveBaseURL(listenAddr string, port int) (string, error) {
+	host, _, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		return "", fmt.Errorf("invalid listen address %q: %w", listenAddr, err)
+	}
+	if host == "" {
+		host = "127.0.0.1"
+	} else if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, strconv.Itoa(port)), nil
 }
 
 // newProxy builds a reverse proxy to target that rewrites qualifying request
