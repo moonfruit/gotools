@@ -49,6 +49,7 @@ go mod tidy                                     # 整理依赖
 - **第三方依赖谨慎引入**：优先标准库。已引入的：
   - `github.com/spf13/cobra` — 仅用于命令行解析（提供 shell 补全的 `completion` 子命令）。
   - `github.com/mattn/go-runewidth` — 计算字符的终端显示宽度（East Asian Width / 组合字符），`wcwidth` 工具使用。
+  - `net/http/httputil`（标准库）— `ccfixer` 用 `ReverseProxy` 实现透明代理，无新增第三方依赖。
 - **工具的 root cmd 用工厂函数返回**：例如 `newRootCmd() *cobra.Command`，避免包级单例污染测试。
 - **测试组织**：单元测试与代码同包同目录（`*_test.go`）；CLI 集成测试也放对应 `cmd/<tool>/` 下，通过 `cmd.SetIn/SetOut/SetErr/SetArgs` 驱动。
 
@@ -58,3 +59,4 @@ go mod tidy                                     # 整理依赖
 |---|---|---|---|
 | `uhsort` | `cmd/uhsort/` | `internal/uhsort/` | 按 host→port→user→rest 排序 `user@host[:port]` 列表，支持去重与计数，支持 stdin/stdout、`-o` 与 `-i` 原地替换。 |
 | `wcwidth` | `cmd/wcwidth/` | `internal/wcwidth/` | 计算 UTF-8 文本的终端显示宽度（CJK/全角=2、组合字符=0）。有参数时逐参数输出宽度，无参数时读 stdin 逐行输出；`-E`/`-N` 控制 East Asian Ambiguous 字符按宽 2 / 宽 1。 |
+| `ccfixer` | `cmd/ccfixer/` | `internal/ccfixer/` | 透明反向代理：把 Claude Code 请求 `messages` 中的 `role:"system"` 消息并入相邻 user 消息（`<system-reminder>` 包裹）后转发，响应原样透传（含流式）。`-u` 上游、`-l` 监听、`-v` 详细日志。 |
