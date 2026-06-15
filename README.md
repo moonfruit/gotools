@@ -93,6 +93,28 @@ Shell completion is provided by Cobra:
 wcwidth completion bash    # also: zsh, fish, powershell
 ```
 
+### `ccfixer` — fix Claude Code's mid-conversation system messages
+
+A transparent reverse proxy. Newer Claude Code emits `role:"system"` messages in
+the middle of the `messages` array (Anthropic's mid-conversation system message
+feature). Upstream relays that don't support it reject the request. `ccfixer`
+merges each such message into an adjacent user message — wrapped in
+`<system-reminder>...</system-reminder>` — and forwards everything else
+(headers, path, and streaming responses) unchanged.
+
+It merges into the immediately preceding user message when possible, otherwise
+the next user message, otherwise relabels the message's own role to `user`.
+Keeping the message in place (rather than hoisting it into the top-level
+`system` field) preserves upstream prefix-cache hit rates.
+
+```bash
+ccfixer -u https://relay.example.com           # listen on 127.0.0.1:8787
+ccfixer -u https://relay.example.com -l :9000  # custom listen address
+ccfixer -u https://relay.example.com -v        # log merges per request
+```
+
+Then point Claude Code at the proxy (e.g. `ANTHROPIC_BASE_URL=http://127.0.0.1:8787`).
+
 ## License
 
 [MIT](./LICENSE)
