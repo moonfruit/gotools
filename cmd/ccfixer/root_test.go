@@ -120,6 +120,19 @@ func TestResolveBaseURLWithRealRandomPort(t *testing.T) {
 	}
 }
 
+func TestStderrWriter(t *testing.T) {
+	cmd := newRootCmd()
+	var buf bytes.Buffer
+	cmd.SetErr(&buf)
+
+	if got := stderrWriter(cmd, false); got != cmd.ErrOrStderr() {
+		t.Fatalf("non-quiet: want command stderr, got %T", got)
+	}
+	if got := stderrWriter(cmd, true); got != io.Discard {
+		t.Fatalf("quiet: want io.Discard, got %T", got)
+	}
+}
+
 func TestRunRootInvalidListen(t *testing.T) {
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"-u", "https://example.com", "-l", "bogus"})

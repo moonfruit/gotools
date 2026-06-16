@@ -20,6 +20,7 @@ type options struct {
 	listen   string
 	upstream string
 	verbose  bool
+	quiet    bool
 }
 
 func newRootCmd() *cobra.Command {
@@ -41,6 +42,7 @@ unchanged.`,
 	cmd.Flags().StringVarP(&opts.listen, "listen", "l", "127.0.0.1:8787", "listen address")
 	cmd.Flags().StringVarP(&opts.upstream, "upstream", "u", "", "upstream base URL (required), e.g. https://relay.example.com")
 	cmd.Flags().BoolVarP(&opts.verbose, "verbose", "v", false, "log how many system messages were merged per request")
+	cmd.Flags().BoolVarP(&opts.quiet, "quiet", "q", false, "suppress all stderr output (startup banner and verbose logs)")
 	_ = cmd.MarkFlagRequired("upstream")
 	return cmd
 }
@@ -67,12 +69,26 @@ func runRoot(cmd *cobra.Command, opts *options) error {
 		return err
 	}
 
-	proxy := newProxy(target, opts, cmd.ErrOrStderr())
-	fmt.Fprintln(cmd.OutOrStdout(), baseURL)                                                                // machine-readable
-	fmt.Fprintf(cmd.ErrOrStderr(), "ccfixer listening on %s, forwarding to %s\n", ln.Addr(), opts.upstream) // human banner
+	// -q routes every stderr write (banner and verbose logs) to io.Discard,
+	// while the machine-readable URL on stdout is always printed.
+	errw := stderrWriter(cmd, opts.quiet)
+
+	proxy := newProxy(target, opts, errw)
+	fmt.Fprintln(cmd.OutOrStdout(), baseURL)                                                   // machine-readable
+	fmt.Fprintf(errw, "ccfixer listening on %s, forwarding to %s\n", ln.Addr(), opts.upstream) // human banner
 
 	server := &http.Server{Handler: proxy}
 	return server.Serve(ln)
+}
+
+// stderrWriter returns the writer used for human-facing stderr output (startup
+// banner and verbose logs). When quiet is set it returns io.Discard, silencing
+// everything on stderr while leaving the machine-readable stdout URL untouched.
+func stderrWriter(cmd *cobra.Command, quiet bool) io.Writer {
+	if quiet {
+		return io.Discard
+	}
+	return cmd.ErrOrStderr()
 }
 
 // resolveBaseURL builds the base URL clients should use to reach the proxy,
